@@ -136,7 +136,7 @@ final class GF256
     public static function evalPoly(array $coeffs, int $x): int
     {
         $result = 0;
-        for ($i = count($coeffs) - 1; $i >= 0; $i--) {
+        for ($i = ($coeffs |> count(...)) - 1; $i >= 0; $i--) {
             $result = self::add(self::mul($result, $x), $coeffs[$i]);
         }
         return $result;
@@ -157,7 +157,7 @@ final class GF256
         $xi = $indices[$i];
         $num = 1;
         $den = 1;
-        $k = count($indices);
+        $k = $indices |> count(...);
 
         for ($j = 0; $j < $k; $j++) {
             if ($j === $i) {

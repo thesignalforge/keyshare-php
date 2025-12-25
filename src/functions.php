@@ -19,6 +19,8 @@ use Signalforge\KeyShare\Exception\TamperingException;
  */
 function share(string $secret, int $threshold, int $shares): array
 {
+    $secretLen = $secret |> strlen(...);
+
     if ($threshold < 2 || $threshold > 255) {
         throw new Exception('Threshold must be between 2 and 255');
     }
@@ -27,28 +29,22 @@ function share(string $secret, int $threshold, int $shares): array
         throw new Exception('Number of shares must be >= threshold and <= 255');
     }
 
-    if (strlen($secret) === 0) {
+    if ($secretLen === 0) {
         throw new Exception('Secret cannot be empty');
     }
 
-    if (strlen($secret) > Shamir::MAX_SECRET_LEN) {
+    if ($secretLen > Shamir::MAX_SECRET_LEN) {
         throw new Exception('Secret too long (max 65535 bytes)');
     }
 
-    // Derive authentication key from secret
-    $authKey = Envelope::deriveAuthKey($secret);
-
-    // Generate deterministic seed from secret
-    $seed = hash('sha256', $secret, true);
-
-    // Split the secret
+    $authKey = $secret |> Envelope::deriveAuthKey(...);
+    $seed = $secret |> hash('sha256', ..., binary: true);
     $rawShares = Shamir::split($secret, $threshold, $shares, $seed);
 
-    // Wrap each share in an authenticated envelope
     $result = [];
     foreach ($rawShares as $index => $shareData) {
-        $envelope = Envelope::create($index, $threshold, $shareData, $authKey);
-        $result[$index] = base64_encode($envelope);
+        $result[$index] = Envelope::create($index, $threshold, $shareData, $authKey)
+            |> base64_encode(...);
     }
 
     return $result;
@@ -65,11 +61,13 @@ function share(string $secret, int $threshold, int $shares): array
  */
 function recover(array $shares): string
 {
-    if (count($shares) < 2) {
+    $count = $shares |> count(...);
+
+    if ($count < 2) {
         throw new Exception('At least 2 shares are required');
     }
 
-    if (count($shares) > 255) {
+    if ($count > 255) {
         throw new Exception('Too many shares (max 255)');
     }
 
@@ -85,15 +83,13 @@ function recover(array $shares): string
             throw new Exception('All shares must be strings');
         }
 
-        $decoded = base64_decode($encoded, true);
+        $decoded = $encoded |> base64_decode(..., strict: true);
         if ($decoded === false) {
             throw new Exception('Invalid base64 in share');
         }
 
         $rawShares[$key] = $decoded;
-
-        // Parse envelope structure
-        $parsed = Envelope::parse($decoded);
+        $parsed = $decoded |> Envelope::parse(...);
 
         $indices[] = $parsed['index'];
         $shareData[] = $parsed['payload'];
@@ -101,37 +97,32 @@ function recover(array $shares): string
         // Check threshold consistency
         if ($firstThreshold === null) {
             $firstThreshold = $parsed['threshold'];
-            $shareLen = strlen($parsed['payload']);
+            $shareLen = $parsed['payload'] |> strlen(...);
         } else {
             if ($parsed['threshold'] !== $firstThreshold) {
                 throw new Exception('Shares have mismatched thresholds');
             }
-            if (strlen($parsed['payload']) !== $shareLen) {
+            if (($parsed['payload'] |> strlen(...)) !== $shareLen) {
                 throw new Exception('Shares have mismatched lengths');
             }
         }
     }
 
     // Check we have enough shares
-    if (count($shares) < $firstThreshold) {
+    if ($count < $firstThreshold) {
         throw new InsufficientSharesException(
             'Insufficient shares for recovery (need more shares to meet threshold)'
         );
     }
 
     // Recover the secret using Lagrange interpolation
-    $shareMap = [];
-    foreach ($indices as $i => $index) {
-        $shareMap[$index] = $shareData[$i];
-    }
-    $secret = Shamir::recover($shareMap);
+    $shareMap = array_combine($indices, $shareData);
+    $secret = $shareMap |> Shamir::recover(...);
 
-    // Derive auth key from recovered secret
-    $authKey = Envelope::deriveAuthKey($secret);
+    // Derive auth key from recovered secret and verify all share MACs
+    $authKey = $secret |> Envelope::deriveAuthKey(...);
 
-    // Second pass: verify all share MACs
     foreach ($rawShares as $decoded) {
-        // This will throw TamperingException if MAC verification fails
         Envelope::verify($decoded, $authKey);
     }
 

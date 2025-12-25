@@ -33,7 +33,7 @@ final class Shamir
         int $numShares,
         string $seed
     ): array {
-        $secretLen = strlen($secret);
+        $secretLen = $secret |> strlen(...);
 
         if ($threshold < 2 || $threshold > 255) {
             throw new Exception('Threshold must be between 2 and 255');
@@ -47,17 +47,17 @@ final class Shamir
             throw new Exception('Secret length must be 1-65535 bytes');
         }
 
-        // Initialize GF(256)
         GF256::init();
 
-        // Initialize PRNG from seed
-        $prng = new DeterministicPRNG(hash('sha256', $seed, true));
+        $prng = $seed
+            |> hash('sha256', ..., binary: true)
+            |> new DeterministicPRNG(...);
 
         // Generate coefficients for each byte position
         // coeffs[byte][degree] where coeffs[byte][0] = secret[byte]
         $coeffs = [];
         for ($i = 0; $i < $secretLen; $i++) {
-            $coeffs[$i] = [ord($secret[$i])]; // Constant term is secret byte
+            $coeffs[$i] = [$secret[$i] |> ord(...)];
             for ($c = 1; $c < $threshold; $c++) {
                 $coeffs[$i][] = $prng->nextByte();
             }
@@ -68,7 +68,7 @@ final class Shamir
         for ($s = 1; $s <= $numShares; $s++) {
             $share = '';
             for ($i = 0; $i < $secretLen; $i++) {
-                $share .= chr(GF256::evalPoly($coeffs[$i], $s));
+                $share .= GF256::evalPoly($coeffs[$i], $s) |> chr(...);
             }
             $shares[$s] = $share;
         }
@@ -84,23 +84,21 @@ final class Shamir
      */
     public static function recover(array $shares): string
     {
-        $numShares = count($shares);
+        $numShares = $shares |> count(...);
 
         if ($numShares < 2) {
             throw new Exception('At least 2 shares required');
         }
 
-        // Initialize GF(256)
         GF256::init();
 
-        // Extract indices and validate
-        $indices = array_keys($shares);
-        $shareData = array_values($shares);
-        $shareLen = strlen($shareData[0]);
+        $indices = $shares |> array_keys(...);
+        $shareData = $shares |> array_values(...);
+        $shareLen = $shareData[0] |> strlen(...);
 
         // Validate all shares have same length
         foreach ($shareData as $share) {
-            if (strlen($share) !== $shareLen) {
+            if (($share |> strlen(...)) !== $shareLen) {
                 throw new Exception('All shares must have the same length');
             }
         }
@@ -123,10 +121,10 @@ final class Shamir
             $result = 0;
             for ($i = 0; $i < $numShares; $i++) {
                 $basis = GF256::lagrangeBasis($i, $indices);
-                $shareByte = ord($shareData[$i][$byte]);
+                $shareByte = $shareData[$i][$byte] |> ord(...);
                 $result = GF256::add($result, GF256::mul($shareByte, $basis));
             }
-            $secret .= chr($result);
+            $secret .= $result |> chr(...);
         }
 
         return $secret;
@@ -140,28 +138,26 @@ final class Shamir
  */
 final class DeterministicPRNG
 {
-    private string $key;
     private int $counter = 0;
     private string $buffer = '';
     private int $bufferPos = 0;
 
-    public function __construct(string $key)
-    {
-        $this->key = $key;
-    }
+    public function __construct(
+        private readonly string $key
+    ) {}
 
     public function nextByte(): int
     {
-        if ($this->bufferPos >= strlen($this->buffer)) {
+        if ($this->bufferPos >= ($this->buffer |> strlen(...))) {
             $this->refill();
         }
-        return ord($this->buffer[$this->bufferPos++]);
+        return $this->buffer[$this->bufferPos++] |> ord(...);
     }
 
     private function refill(): void
     {
-        $counterBytes = pack('J', $this->counter); // 64-bit big-endian
-        $this->buffer = hash('sha256', $this->key . $counterBytes, true);
+        $this->buffer = ($this->key . ($this->counter |> pack('J', ...)))
+            |> hash('sha256', ..., binary: true);
         $this->bufferPos = 0;
         $this->counter++;
     }

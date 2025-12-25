@@ -32,7 +32,7 @@ final class Envelope
      */
     public static function deriveAuthKey(string $secret): string
     {
-        return hash_hmac('sha256', self::AUTH_KEY_INFO, $secret, true);
+        return hash_hmac('sha256', self::AUTH_KEY_INFO, $secret, binary: true);
     }
 
     /**
@@ -54,21 +54,20 @@ final class Envelope
         string $payload,
         string $authKey
     ): string {
-        $payloadLen = strlen($payload);
+        $payloadLen = $payload |> strlen(...);
 
         if ($payloadLen > 65535) {
             throw new Exception('Payload too large for envelope');
         }
 
         // Build header
-        $header = chr(self::VERSION) .
-                  chr($shareIndex) .
-                  chr($threshold) .
-                  chr(($payloadLen >> 8) & 0xFF) .
-                  chr($payloadLen & 0xFF);
+        $header = (self::VERSION |> chr(...))
+            . ($shareIndex |> chr(...))
+            . ($threshold |> chr(...))
+            . (($payloadLen >> 8) & 0xFF |> chr(...))
+            . ($payloadLen & 0xFF |> chr(...));
 
-        // Compute auth tag over header + payload
-        $tag = hash_hmac('sha256', $header . $payload, $authKey, true);
+        $tag = hash_hmac('sha256', $header . $payload, $authKey, binary: true);
 
         return $header . $payload . $tag;
     }
@@ -80,21 +79,21 @@ final class Envelope
      */
     public static function parse(string $envelope): array
     {
-        if (strlen($envelope) < self::MIN_SIZE) {
+        if (($envelope |> strlen(...)) < self::MIN_SIZE) {
             throw new Exception('Envelope too short');
         }
 
-        $version = ord($envelope[0]);
+        $version = $envelope[0] |> ord(...);
         if ($version !== self::VERSION) {
             throw new Exception('Invalid envelope version');
         }
 
-        $index = ord($envelope[1]);
-        $threshold = ord($envelope[2]);
-        $payloadLen = (ord($envelope[3]) << 8) | ord($envelope[4]);
+        $index = $envelope[1] |> ord(...);
+        $threshold = $envelope[2] |> ord(...);
+        $payloadLen = (($envelope[3] |> ord(...)) << 8) | ($envelope[4] |> ord(...));
 
-        $expectedLen = self::size($payloadLen);
-        if (strlen($envelope) !== $expectedLen) {
+        $expectedLen = $payloadLen |> self::size(...);
+        if (($envelope |> strlen(...)) !== $expectedLen) {
             throw new Exception('Envelope length mismatch');
         }
 
@@ -115,21 +114,21 @@ final class Envelope
      */
     public static function verify(string $envelope, string $authKey): array
     {
-        if (strlen($envelope) < self::MIN_SIZE) {
+        if (($envelope |> strlen(...)) < self::MIN_SIZE) {
             throw new Exception('Envelope too short');
         }
 
-        $version = ord($envelope[0]);
+        $version = $envelope[0] |> ord(...);
         if ($version !== self::VERSION) {
             throw new Exception('Invalid envelope version');
         }
 
-        $index = ord($envelope[1]);
-        $threshold = ord($envelope[2]);
-        $payloadLen = (ord($envelope[3]) << 8) | ord($envelope[4]);
+        $index = $envelope[1] |> ord(...);
+        $threshold = $envelope[2] |> ord(...);
+        $payloadLen = (($envelope[3] |> ord(...)) << 8) | ($envelope[4] |> ord(...));
 
-        $expectedLen = self::size($payloadLen);
-        if (strlen($envelope) !== $expectedLen) {
+        $expectedLen = $payloadLen |> self::size(...);
+        if (($envelope |> strlen(...)) !== $expectedLen) {
             throw new Exception('Envelope length mismatch');
         }
 
@@ -137,10 +136,8 @@ final class Envelope
         $payload = substr($envelope, self::HEADER_SIZE, $payloadLen);
         $storedTag = substr($envelope, self::HEADER_SIZE + $payloadLen, self::TAG_SIZE);
 
-        // Compute expected tag
-        $expectedTag = hash_hmac('sha256', $header . $payload, $authKey, true);
+        $expectedTag = hash_hmac('sha256', $header . $payload, $authKey, binary: true);
 
-        // Constant-time comparison
         if (!hash_equals($expectedTag, $storedTag)) {
             throw new TamperingException(
                 'Share authentication failed: MAC mismatch (tampered or mixed shares)'

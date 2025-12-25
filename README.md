@@ -31,7 +31,7 @@ The algorithm works by encoding the secret as the constant term of a random poly
 composer require signalforge/keyshare
 ```
 
-**Requirements:** PHP 8.3+
+**Requirements:** PHP 8.5+
 
 ## Usage
 
