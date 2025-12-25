@@ -54,22 +54,18 @@ final class Envelope
         string $payload,
         string $authKey
     ): string {
-        $payloadLen = $payload |> strlen(...);
+        $payloadLen = strlen($payload);
 
         if ($payloadLen > 65535) {
             throw new Exception('Payload too large for envelope');
         }
 
-        // Build header
-        $header = (self::VERSION |> chr(...))
-            . ($shareIndex |> chr(...))
-            . ($threshold |> chr(...))
-            . ((($payloadLen >> 8) & 0xFF) |> chr(...))
-            . (($payloadLen & 0xFF) |> chr(...));
+        // Build header using pack (C=unsigned char, n=unsigned short big-endian)
+        $header = pack('CCCn', self::VERSION, $shareIndex, $threshold, $payloadLen);
+        $data = $header . $payload;
+        $tag = hash_hmac('sha256', $data, $authKey, binary: true);
 
-        $tag = hash_hmac('sha256', $header . $payload, $authKey, binary: true);
-
-        return $header . $payload . $tag;
+        return $data . $tag;
     }
 
     /**
@@ -79,30 +75,27 @@ final class Envelope
      */
     public static function parse(string $envelope): array
     {
-        if (($envelope |> strlen(...)) < self::MIN_SIZE) {
+        $len = strlen($envelope);
+        if ($len < self::MIN_SIZE) {
             throw new Exception('Envelope too short');
         }
 
-        $version = $envelope[0] |> ord(...);
-        if ($version !== self::VERSION) {
+        // Unpack header: version, index, threshold, payloadLen (big-endian)
+        $header = unpack('Cversion/Cindex/Cthreshold/npayloadLen', $envelope);
+
+        if ($header['version'] !== self::VERSION) {
             throw new Exception('Invalid envelope version');
         }
 
-        $index = $envelope[1] |> ord(...);
-        $threshold = $envelope[2] |> ord(...);
-        $payloadLen = (($envelope[3] |> ord(...)) << 8) | ($envelope[4] |> ord(...));
-
-        $expectedLen = $payloadLen |> self::size(...);
-        if (($envelope |> strlen(...)) !== $expectedLen) {
+        $payloadLen = $header['payloadLen'];
+        if ($len !== self::HEADER_SIZE + $payloadLen + self::TAG_SIZE) {
             throw new Exception('Envelope length mismatch');
         }
 
-        $payload = substr($envelope, self::HEADER_SIZE, $payloadLen);
-
         return [
-            'index' => $index,
-            'threshold' => $threshold,
-            'payload' => $payload,
+            'index' => $header['index'],
+            'threshold' => $header['threshold'],
+            'payload' => substr($envelope, self::HEADER_SIZE, $payloadLen),
         ];
     }
 
@@ -114,29 +107,28 @@ final class Envelope
      */
     public static function verify(string $envelope, string $authKey): array
     {
-        if (($envelope |> strlen(...)) < self::MIN_SIZE) {
+        $len = strlen($envelope);
+        if ($len < self::MIN_SIZE) {
             throw new Exception('Envelope too short');
         }
 
-        $version = $envelope[0] |> ord(...);
-        if ($version !== self::VERSION) {
+        // Unpack header: version, index, threshold, payloadLen (big-endian)
+        $header = unpack('Cversion/Cindex/Cthreshold/npayloadLen', $envelope);
+
+        if ($header['version'] !== self::VERSION) {
             throw new Exception('Invalid envelope version');
         }
 
-        $index = $envelope[1] |> ord(...);
-        $threshold = $envelope[2] |> ord(...);
-        $payloadLen = (($envelope[3] |> ord(...)) << 8) | ($envelope[4] |> ord(...));
-
-        $expectedLen = $payloadLen |> self::size(...);
-        if (($envelope |> strlen(...)) !== $expectedLen) {
+        $payloadLen = $header['payloadLen'];
+        $dataLen = self::HEADER_SIZE + $payloadLen;
+        if ($len !== $dataLen + self::TAG_SIZE) {
             throw new Exception('Envelope length mismatch');
         }
 
-        $header = substr($envelope, 0, self::HEADER_SIZE);
-        $payload = substr($envelope, self::HEADER_SIZE, $payloadLen);
-        $storedTag = substr($envelope, self::HEADER_SIZE + $payloadLen, self::TAG_SIZE);
-
-        $expectedTag = hash_hmac('sha256', $header . $payload, $authKey, binary: true);
+        // Verify MAC
+        $data = substr($envelope, 0, $dataLen);
+        $storedTag = substr($envelope, $dataLen, self::TAG_SIZE);
+        $expectedTag = hash_hmac('sha256', $data, $authKey, binary: true);
 
         if (!hash_equals($expectedTag, $storedTag)) {
             throw new TamperingException(
@@ -145,9 +137,9 @@ final class Envelope
         }
 
         return [
-            'index' => $index,
-            'threshold' => $threshold,
-            'payload' => $payload,
+            'index' => $header['index'],
+            'threshold' => $header['threshold'],
+            'payload' => substr($envelope, self::HEADER_SIZE, $payloadLen),
         ];
     }
 }

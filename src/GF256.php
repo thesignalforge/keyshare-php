@@ -107,7 +107,9 @@ final class GF256
             return 0;
         }
 
-        return self::$EXP[(self::$LOG[$a] - self::$LOG[$b] + 255) % 255];
+        // Use extended EXP table to avoid modulo operation
+        $diff = self::$LOG[$a] - self::$LOG[$b];
+        return self::$EXP[$diff < 0 ? $diff + 255 : $diff];
     }
 
     /**
@@ -135,10 +137,16 @@ final class GF256
      */
     public static function evalPoly(array $coeffs, int $x): int
     {
+        $log = self::$LOG;
+        $exp = self::$EXP;
+        $logX = $log[$x];
         $result = 0;
-        for ($i = ($coeffs |> count(...)) - 1; $i >= 0; $i--) {
-            $result = self::add(self::mul($result, $x), $coeffs[$i]);
+
+        for ($i = count($coeffs) - 1; $i >= 0; $i--) {
+            // Inline mul($result, $x) ^ $coeffs[$i]
+            $result = (($result === 0) ? 0 : $exp[$log[$result] + $logX]) ^ $coeffs[$i];
         }
+
         return $result;
     }
 
@@ -154,20 +162,25 @@ final class GF256
      */
     public static function lagrangeBasis(int $i, array $indices): int
     {
+        $log = self::$LOG;
+        $exp = self::$EXP;
         $xi = $indices[$i];
-        $num = 1;
-        $den = 1;
-        $k = $indices |> count(...);
+        $logNum = 0;
+        $logDen = 0;
+        $k = count($indices);
 
         for ($j = 0; $j < $k; $j++) {
             if ($j === $i) {
                 continue;
             }
             $xj = $indices[$j];
-            $num = self::mul($num, $xj);
-            $den = self::mul($den, self::sub($xi, $xj));
+            // Accumulate logs instead of multiplying (faster)
+            $logNum += $log[$xj];
+            $logDen += $log[$xi ^ $xj];
         }
 
-        return self::div($num, $den);
+        // div: exp[logNum - logDen], handling wrap-around
+        $diff = ($logNum % 255) - ($logDen % 255);
+        return $exp[$diff < 0 ? $diff + 255 : $diff];
     }
 }

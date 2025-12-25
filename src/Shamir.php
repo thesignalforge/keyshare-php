@@ -33,7 +33,7 @@ final class Shamir
         int $numShares,
         string $seed
     ): array {
-        $secretLen = $secret |> strlen(...);
+        $secretLen = strlen($secret);
 
         if ($threshold < 2 || $threshold > 255) {
             throw new Exception('Threshold must be between 2 and 255');
@@ -49,15 +49,14 @@ final class Shamir
 
         GF256::init();
 
-        $prng = $seed
-            |> (fn($s) => hash('sha256', $s, binary: true))
-            |> (fn($h) => new DeterministicPRNG($h));
+        $prng = new DeterministicPRNG(hash('sha256', $seed, binary: true));
 
         // Generate coefficients for each byte position
         // coeffs[byte][degree] where coeffs[byte][0] = secret[byte]
+        $secretBytes = unpack('C*', $secret);
         $coeffs = [];
-        for ($i = 0; $i < $secretLen; $i++) {
-            $coeffs[$i] = [$secret[$i] |> ord(...)];
+        for ($i = 1; $i <= $secretLen; $i++) {
+            $coeffs[$i] = [$secretBytes[$i]];
             for ($c = 1; $c < $threshold; $c++) {
                 $coeffs[$i][] = $prng->nextByte();
             }
@@ -66,11 +65,11 @@ final class Shamir
         // Evaluate polynomial at each share index (1..numShares)
         $shares = [];
         for ($s = 1; $s <= $numShares; $s++) {
-            $share = '';
-            for ($i = 0; $i < $secretLen; $i++) {
-                $share .= GF256::evalPoly($coeffs[$i], $s) |> chr(...);
+            $shareBytes = [];
+            for ($i = 1; $i <= $secretLen; $i++) {
+                $shareBytes[] = GF256::evalPoly($coeffs[$i], $s);
             }
-            $shares[$s] = $share;
+            $shares[$s] = pack('C*', ...$shareBytes);
         }
 
         return $shares;
@@ -84,7 +83,7 @@ final class Shamir
      */
     public static function recover(array $shares): string
     {
-        $numShares = $shares |> count(...);
+        $numShares = count($shares);
 
         if ($numShares < 2) {
             throw new Exception('At least 2 shares required');
@@ -92,42 +91,56 @@ final class Shamir
 
         GF256::init();
 
-        $indices = $shares |> array_keys(...);
-        $shareData = $shares |> array_values(...);
-        $shareLen = $shareData[0] |> strlen(...);
+        $indices = array_keys($shares);
+        $shareData = array_values($shares);
+        $shareLen = strlen($shareData[0]);
 
         // Validate all shares have same length
         foreach ($shareData as $share) {
-            if (($share |> strlen(...)) !== $shareLen) {
+            if (strlen($share) !== $shareLen) {
                 throw new Exception('All shares must have the same length');
             }
         }
 
-        // Validate indices
-        foreach ($indices as $i => $index) {
+        // Validate indices and check for duplicates using a set
+        $seen = [];
+        foreach ($indices as $index) {
             if ($index < 1 || $index > 255) {
                 throw new Exception('Invalid share index (must be 1-255)');
             }
-            for ($j = $i + 1; $j < $numShares; $j++) {
-                if ($indices[$j] === $index) {
-                    throw new Exception('Duplicate share indices detected');
-                }
+            if (isset($seen[$index])) {
+                throw new Exception('Duplicate share indices detected');
             }
+            $seen[$index] = true;
+        }
+
+        // Precompute Lagrange basis values (independent of byte position)
+        $basis = [];
+        for ($i = 0; $i < $numShares; $i++) {
+            $basis[$i] = GF256::lagrangeBasis($i, $indices);
+        }
+
+        // Preprocess share bytes to arrays for faster access
+        $shareBytes = [];
+        for ($i = 0; $i < $numShares; $i++) {
+            $shareBytes[$i] = unpack('C*', $shareData[$i]);
         }
 
         // Lagrange interpolation at x=0
-        $secret = '';
-        for ($byte = 0; $byte < $shareLen; $byte++) {
+        $secretBytes = [];
+        for ($byte = 1; $byte <= $shareLen; $byte++) {
             $result = 0;
             for ($i = 0; $i < $numShares; $i++) {
-                $basis = GF256::lagrangeBasis($i, $indices);
-                $shareByte = $shareData[$i][$byte] |> ord(...);
-                $result = GF256::add($result, GF256::mul($shareByte, $basis));
+                // Inline: result ^= mul(shareBytes[i][byte], basis[i])
+                $sb = $shareBytes[$i][$byte];
+                if ($sb !== 0 && $basis[$i] !== 0) {
+                    $result ^= GF256::mul($sb, $basis[$i]);
+                }
             }
-            $secret .= $result |> chr(...);
+            $secretBytes[] = $result;
         }
 
-        return $secret;
+        return pack('C*', ...$secretBytes);
     }
 }
 
@@ -138,9 +151,11 @@ final class Shamir
  */
 final class DeterministicPRNG
 {
+    private const BUFFER_SIZE = 32; // SHA-256 output size
+
     private int $counter = 0;
     private string $buffer = '';
-    private int $bufferPos = 0;
+    private int $bufferPos = 32; // Force initial refill
 
     public function __construct(
         private readonly string $key
@@ -148,17 +163,10 @@ final class DeterministicPRNG
 
     public function nextByte(): int
     {
-        if ($this->bufferPos >= ($this->buffer |> strlen(...))) {
-            $this->refill();
+        if ($this->bufferPos >= self::BUFFER_SIZE) {
+            $this->buffer = hash('sha256', $this->key . pack('J', $this->counter++), binary: true);
+            $this->bufferPos = 0;
         }
-        return $this->buffer[$this->bufferPos++] |> ord(...);
-    }
-
-    private function refill(): void
-    {
-        $counterBytes = $this->counter |> (fn($c) => pack('J', $c));
-        $this->buffer = ($this->key . $counterBytes) |> (fn($d) => hash('sha256', $d, binary: true));
-        $this->bufferPos = 0;
-        $this->counter++;
+        return ord($this->buffer[$this->bufferPos++]);
     }
 }

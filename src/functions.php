@@ -19,7 +19,7 @@ use Signalforge\KeyShare\Exception\TamperingException;
  */
 function share(string $secret, int $threshold, int $shares): array
 {
-    $secretLen = $secret |> strlen(...);
+    $secretLen = strlen($secret);
 
     if ($threshold < 2 || $threshold > 255) {
         throw new Exception('Threshold must be between 2 and 255');
@@ -37,14 +37,13 @@ function share(string $secret, int $threshold, int $shares): array
         throw new Exception('Secret too long (max 65535 bytes)');
     }
 
-    $authKey = $secret |> Envelope::deriveAuthKey(...);
-    $seed = $secret |> (fn($s) => hash('sha256', $s, binary: true));
+    $authKey = Envelope::deriveAuthKey($secret);
+    $seed = hash('sha256', $secret, binary: true);
     $rawShares = Shamir::split($secret, $threshold, $shares, $seed);
 
     $result = [];
     foreach ($rawShares as $index => $shareData) {
-        $result[$index] = Envelope::create($index, $threshold, $shareData, $authKey)
-            |> base64_encode(...);
+        $result[$index] = base64_encode(Envelope::create($index, $threshold, $shareData, $authKey));
     }
 
     return $result;
@@ -61,7 +60,7 @@ function share(string $secret, int $threshold, int $shares): array
  */
 function recover(array $shares): string
 {
-    $count = $shares |> count(...);
+    $count = count($shares);
 
     if ($count < 2) {
         throw new Exception('At least 2 shares are required');
@@ -83,26 +82,27 @@ function recover(array $shares): string
             throw new Exception('All shares must be strings');
         }
 
-        $decoded = $encoded |> (fn($e) => base64_decode($e, strict: true));
+        $decoded = base64_decode($encoded, strict: true);
         if ($decoded === false) {
             throw new Exception('Invalid base64 in share');
         }
 
         $rawShares[$key] = $decoded;
-        $parsed = $decoded |> Envelope::parse(...);
+        $parsed = Envelope::parse($decoded);
 
         $indices[] = $parsed['index'];
         $shareData[] = $parsed['payload'];
 
         // Check threshold consistency
+        $payloadLen = strlen($parsed['payload']);
         if ($firstThreshold === null) {
             $firstThreshold = $parsed['threshold'];
-            $shareLen = $parsed['payload'] |> strlen(...);
+            $shareLen = $payloadLen;
         } else {
             if ($parsed['threshold'] !== $firstThreshold) {
                 throw new Exception('Shares have mismatched thresholds');
             }
-            if (($parsed['payload'] |> strlen(...)) !== $shareLen) {
+            if ($payloadLen !== $shareLen) {
                 throw new Exception('Shares have mismatched lengths');
             }
         }
@@ -117,10 +117,10 @@ function recover(array $shares): string
 
     // Recover the secret using Lagrange interpolation
     $shareMap = array_combine($indices, $shareData);
-    $secret = $shareMap |> Shamir::recover(...);
+    $secret = Shamir::recover($shareMap);
 
     // Derive auth key from recovered secret and verify all share MACs
-    $authKey = $secret |> Envelope::deriveAuthKey(...);
+    $authKey = Envelope::deriveAuthKey($secret);
 
     foreach ($rawShares as $decoded) {
         Envelope::verify($decoded, $authKey);
