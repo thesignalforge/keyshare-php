@@ -64,8 +64,8 @@ final class Envelope
         $header = (self::VERSION |> chr(...))
             . ($shareIndex |> chr(...))
             . ($threshold |> chr(...))
-            . (($payloadLen >> 8) & 0xFF |> chr(...))
-            . ($payloadLen & 0xFF |> chr(...));
+            . ((($payloadLen >> 8) & 0xFF) |> chr(...))
+            . (($payloadLen & 0xFF) |> chr(...));
 
         $tag = hash_hmac('sha256', $header . $payload, $authKey, binary: true);
 

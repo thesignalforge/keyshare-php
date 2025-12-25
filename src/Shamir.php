@@ -50,8 +50,8 @@ final class Shamir
         GF256::init();
 
         $prng = $seed
-            |> hash('sha256', ..., binary: true)
-            |> new DeterministicPRNG(...);
+            |> (fn($s) => hash('sha256', $s, binary: true))
+            |> (fn($h) => new DeterministicPRNG($h));
 
         // Generate coefficients for each byte position
         // coeffs[byte][degree] where coeffs[byte][0] = secret[byte]
@@ -156,8 +156,8 @@ final class DeterministicPRNG
 
     private function refill(): void
     {
-        $this->buffer = ($this->key . ($this->counter |> pack('J', ...)))
-            |> hash('sha256', ..., binary: true);
+        $counterBytes = $this->counter |> (fn($c) => pack('J', $c));
+        $this->buffer = ($this->key . $counterBytes) |> (fn($d) => hash('sha256', $d, binary: true));
         $this->bufferPos = 0;
         $this->counter++;
     }

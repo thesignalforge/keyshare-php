@@ -38,7 +38,7 @@ function share(string $secret, int $threshold, int $shares): array
     }
 
     $authKey = $secret |> Envelope::deriveAuthKey(...);
-    $seed = $secret |> hash('sha256', ..., binary: true);
+    $seed = $secret |> (fn($s) => hash('sha256', $s, binary: true));
     $rawShares = Shamir::split($secret, $threshold, $shares, $seed);
 
     $result = [];
@@ -83,7 +83,7 @@ function recover(array $shares): string
             throw new Exception('All shares must be strings');
         }
 
-        $decoded = $encoded |> base64_decode(..., strict: true);
+        $decoded = $encoded |> (fn($e) => base64_decode($e, strict: true));
         if ($decoded === false) {
             throw new Exception('Invalid base64 in share');
         }
