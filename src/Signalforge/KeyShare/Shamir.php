@@ -46,7 +46,7 @@ final class Shamir
         }
 
         // Initialize GF(256)
-        GF256::init();
+        gf256_init();
 
         // Initialize PRNG from seed
         $prng = new DeterministicPRNG(hash('sha256', $seed, true));
@@ -66,7 +66,7 @@ final class Shamir
         for ($s = 1; $s <= $numShares; $s++) {
             $share = '';
             for ($i = 0; $i < $secretLen; $i++) {
-                $share .= chr(GF256::evalPoly($coeffs[$i], $s));
+                $share .= chr(gf256_eval_poly($coeffs[$i], $s));
             }
             $shares[$s] = $share;
         }
@@ -89,7 +89,7 @@ final class Shamir
         }
 
         // Initialize GF(256)
-        GF256::init();
+        gf256_init();
 
         // Extract indices and validate
         $indices = array_keys($shares);
@@ -120,43 +120,14 @@ final class Shamir
         for ($byte = 0; $byte < $shareLen; $byte++) {
             $result = 0;
             for ($i = 0; $i < $numShares; $i++) {
-                $basis = self::lagrangeBasis($i, $indices);
+                $basis = gf256_lagrange_basis($i, $indices);
                 $shareByte = ord($shareData[$i][$byte]);
-                $result = GF256::add($result, GF256::mul($shareByte, $basis));
+                $result = gf256_add($result, gf256_mul($shareByte, $basis));
             }
             $secret .= chr($result);
         }
 
         return $secret;
-    }
-
-    /**
-     * Compute Lagrange basis polynomial l_i(0).
-     *
-     * l_i(0) = product_{j!=i} (0 - x_j) / (x_i - x_j)
-     *        = product_{j!=i} x_j / (x_i ^ x_j)  [in GF(256)]
-     *
-     * @param int $i Index in indices array
-     * @param array<int> $indices Share indices
-     * @return int Basis value
-     */
-    private static function lagrangeBasis(int $i, array $indices): int
-    {
-        $xi = $indices[$i];
-        $num = 1;
-        $den = 1;
-        $k = count($indices);
-
-        for ($j = 0; $j < $k; $j++) {
-            if ($j === $i) {
-                continue;
-            }
-            $xj = $indices[$j];
-            $num = GF256::mul($num, $xj);
-            $den = GF256::mul($den, GF256::sub($xi, $xj));
-        }
-
-        return GF256::div($num, $den);
     }
 }
 

@@ -15,6 +15,7 @@
             "Signalforge\\KeyShare\\": "src/Signalforge/KeyShare/"
         },
         "files": [
+            "src/Signalforge/KeyShare/gf256.php",
             "src/functions.php"
         ]
     },

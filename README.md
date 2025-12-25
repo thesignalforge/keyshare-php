@@ -168,26 +168,7 @@ Each share is a base64-encoded authenticated envelope:
 
 The format is binary-compatible with the C extension.
 
-## Performance Caveats vs C Extension
-
-| Aspect | C Extension | Pure PHP |
-|--------|-------------|----------|
-| GF(256) ops | SIMD (AVX2/SSE2) | Scalar |
-| Memory | Manual management | GC-managed |
-| Key zeroing | `memset(_, 0, _)` | Unset only |
-| Large secrets | Optimized batching | Per-byte loop |
-
-### Performance Comparison
-
-| Operation | C (AVX2) | PHP |
-|-----------|----------|-----|
-| share(32B, 5, 10) | ~10 μs | ~500 μs |
-| recover(5 shares, 32B) | ~5 μs | ~300 μs |
-| share(1KB, 5, 10) | ~65 μs | ~15 ms |
-
-The pure PHP implementation is approximately 50-200x slower than the C extension with SIMD.
-
-## When to Prefer the C Version
+## When to Prefer the C Extension
 
 1. **Performance**: C extension is significantly faster
 2. **Large secrets**: Memory efficiency for large data
