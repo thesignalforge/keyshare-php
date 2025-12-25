@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Signalforge\KeyShare;
 
+use Signalforge\KeyShare\Exception\Exception;
+
 /**
  * Shamir's Secret Sharing implementation.
  *

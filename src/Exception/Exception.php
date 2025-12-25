@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Signalforge\KeyShare;
+namespace Signalforge\KeyShare\Exception;
 
 /**
  * Base exception for KeyShare operations.

@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Signalforge\KeyShare\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Signalforge\KeyShare\Exception;
-use Signalforge\KeyShare\TamperingException;
-use Signalforge\KeyShare\InsufficientSharesException;
+use Signalforge\KeyShare\Exception\Exception;
+use Signalforge\KeyShare\Exception\TamperingException;
+use Signalforge\KeyShare\Exception\InsufficientSharesException;
 
 use function Signalforge\KeyShare\share;
 use function Signalforge\KeyShare\recover;
-use function Signalforge\KeyShare\passphrase;
 
 final class KeyShareTest extends TestCase
 {
@@ -58,24 +57,6 @@ final class KeyShareTest extends TestCase
         $this->assertSame($secret, $combo1);
         $this->assertSame($secret, $combo2);
         $this->assertSame($secret, $combo3);
-    }
-
-    public function testPassphraseKeyDerivation(): void
-    {
-        $passphrase = 'correct horse battery staple';
-        $shares = passphrase($passphrase, 3, 5);
-
-        $this->assertCount(5, $shares);
-
-        // Recover the derived key
-        $derivedKey = recover([
-            2 => $shares[2],
-            4 => $shares[4],
-            5 => $shares[5],
-        ]);
-
-        // Key should be 32 bytes
-        $this->assertSame(32, strlen($derivedKey));
     }
 
     public function testDeterministicOutput(): void

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Signalforge\KeyShare;
+namespace Signalforge\KeyShare\Exception;
 
 /**
  * Exception thrown when share tampering or mixing is detected.

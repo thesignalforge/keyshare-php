@@ -1,6 +1,6 @@
 {
     "name": "signalforge/keyshare",
-    "description": "Pure PHP implementation of signalforge_keyshare extension - Shamir's Secret Sharing with authenticated envelopes",
+    "description": "Shamir's Secret Sharing with authenticated envelopes",
     "type": "library",
     "license": "MIT",
     "keywords": ["shamir", "secret-sharing", "cryptography", "threshold", "security"],
@@ -12,7 +12,8 @@
     },
     "autoload": {
         "psr-4": {
-            "Signalforge\\KeyShare\\": "src/Signalforge/KeyShare/"
+            "Signalforge\\KeyShare\\": "src/",
+            "Signalforge\\KeyShare\\Exception\\": "src/Exception/"
         },
         "files": [
             "src/functions.php"

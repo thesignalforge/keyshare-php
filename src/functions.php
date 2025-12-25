@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Signalforge\KeyShare;
 
+use Signalforge\KeyShare\Exception\Exception;
+use Signalforge\KeyShare\Exception\InsufficientSharesException;
+use Signalforge\KeyShare\Exception\TamperingException;
+
 /**
  * Split a secret into shares using Shamir's Secret Sharing.
  *
@@ -132,41 +136,4 @@ function recover(array $shares): string
     }
 
     return $secret;
-}
-
-/**
- * Derive a key from a passphrase and split it into shares.
- *
- * Uses PBKDF2-SHA256 with 100,000 iterations to derive a 32-byte key,
- * then splits that key using Shamir's scheme.
- *
- * @param string $passphrase The passphrase to derive a key from
- * @param int $threshold Minimum shares needed to reconstruct (2-255)
- * @param int $shares Total number of shares to generate (threshold-255)
- * @return array<int, string> Associative array of base64 encoded shares
- * @throws Exception on invalid parameters
- */
-function passphrase(string $passphrase, int $threshold, int $shares): array
-{
-    if ($threshold < 2 || $threshold > 255) {
-        throw new Exception('Threshold must be between 2 and 255');
-    }
-
-    if ($shares < $threshold || $shares > 255) {
-        throw new Exception('Number of shares must be >= threshold and <= 255');
-    }
-
-    if (strlen($passphrase) === 0) {
-        throw new Exception('Passphrase cannot be empty');
-    }
-
-    // Derive deterministic salt from passphrase
-    $saltInput = 'signalforge-keyshare-salt-v1' . hash('sha256', $passphrase, true);
-    $salt = substr(hash('sha256', substr($saltInput, 0, 44), true), 0, 16);
-
-    // Derive 32-byte key using PBKDF2-SHA256 with 100,000 iterations
-    $derivedKey = hash_pbkdf2('sha256', $passphrase, $salt, 100000, 32, true);
-
-    // Split the derived key
-    return share($derivedKey, $threshold, $shares);
 }
