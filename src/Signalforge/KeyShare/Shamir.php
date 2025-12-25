@@ -46,7 +46,7 @@ final class Shamir
         }
 
         // Initialize GF(256)
-        gf256_init();
+        GF256::init();
 
         // Initialize PRNG from seed
         $prng = new DeterministicPRNG(hash('sha256', $seed, true));
@@ -66,7 +66,7 @@ final class Shamir
         for ($s = 1; $s <= $numShares; $s++) {
             $share = '';
             for ($i = 0; $i < $secretLen; $i++) {
-                $share .= chr(gf256_eval_poly($coeffs[$i], $s));
+                $share .= chr(GF256::evalPoly($coeffs[$i], $s));
             }
             $shares[$s] = $share;
         }
@@ -89,7 +89,7 @@ final class Shamir
         }
 
         // Initialize GF(256)
-        gf256_init();
+        GF256::init();
 
         // Extract indices and validate
         $indices = array_keys($shares);
@@ -120,9 +120,9 @@ final class Shamir
         for ($byte = 0; $byte < $shareLen; $byte++) {
             $result = 0;
             for ($i = 0; $i < $numShares; $i++) {
-                $basis = gf256_lagrange_basis($i, $indices);
+                $basis = GF256::lagrangeBasis($i, $indices);
                 $shareByte = ord($shareData[$i][$byte]);
-                $result = gf256_add($result, gf256_mul($shareByte, $basis));
+                $result = GF256::add($result, GF256::mul($shareByte, $basis));
             }
             $secret .= chr($result);
         }
